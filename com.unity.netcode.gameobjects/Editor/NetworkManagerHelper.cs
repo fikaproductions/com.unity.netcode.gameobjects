@@ -27,11 +27,13 @@ namespace Unity.Netcode.Editor
         {
             Singleton = new NetworkManagerHelper();
             NetworkManager.NetworkManagerHelper = Singleton;
-            EditorApplication.playModeStateChanged -= EditorApplication_playModeStateChanged;
-            EditorApplication.hierarchyChanged -= EditorApplication_hierarchyChanged;
 
-            EditorApplication.playModeStateChanged += EditorApplication_playModeStateChanged;
-            EditorApplication.hierarchyChanged += EditorApplication_hierarchyChanged;
+            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1663
+            // EditorApplication.playModeStateChanged -= EditorApplication_playModeStateChanged;
+            // EditorApplication.hierarchyChanged -= EditorApplication_hierarchyChanged;
+
+            // EditorApplication.playModeStateChanged += EditorApplication_playModeStateChanged;
+            // EditorApplication.hierarchyChanged += EditorApplication_hierarchyChanged;
         }
 
         private static void EditorApplication_playModeStateChanged(PlayModeStateChange playModeStateChange)

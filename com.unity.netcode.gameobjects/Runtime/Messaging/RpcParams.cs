@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Unity.Collections;
 
 namespace Unity.Netcode
@@ -42,6 +43,22 @@ namespace Unity.Netcode
     {
         public ClientRpcSendParams Send;
         public ClientRpcReceiveParams Receive;
+
+        public static ClientRpcParams SendTo(params ulong[] targets) => new ClientRpcParams
+        {
+            Send = new ClientRpcSendParams
+            {
+                TargetClientIds = targets
+            }
+        };
+
+        public static ClientRpcParams SendToAllExcept(params ulong[] except) => new ClientRpcParams
+        {
+            Send = new ClientRpcSendParams
+            {
+                TargetClientIds = NetworkManager.Singleton.ConnectedClientsIds.Where(clientId => !except.Contains(clientId)).ToArray()
+            }
+        };
     }
 
 #pragma warning disable IDE1006 // disable naming rule violation check

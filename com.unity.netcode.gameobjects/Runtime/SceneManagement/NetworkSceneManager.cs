@@ -349,7 +349,7 @@ namespace Unity.Netcode
             }
         }
 
-        internal ISceneManagerHandler SceneManagerHandler = new DefaultSceneManagerHandler();
+        public ISceneManagerHandler SceneManagerHandler = new DefaultSceneManagerHandler();
         /// End of Proof of Concept
 
 
