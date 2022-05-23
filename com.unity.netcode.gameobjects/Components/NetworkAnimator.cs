@@ -52,6 +52,12 @@ namespace Unity.Netcode.Components
         /// <inheritdoc />
         public void NetworkUpdate(NetworkUpdateStage updateStage)
         {
+            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1757
+            if (!m_NetworkAnimator || !m_NetworkAnimator.isActiveAndEnabled)
+            {
+                return;
+            }
+
             switch (updateStage)
             {
                 case NetworkUpdateStage.PreUpdate:
@@ -63,18 +69,22 @@ namespace Unity.Netcode.Components
                             FlushMessages();
                         }
 
-                        // Everyone applies any parameters updated
-                        foreach (var parameterUpdate in m_ProcessParameterUpdates)
-                        {
-                            m_NetworkAnimator.UpdateParameters(parameterUpdate);
-                        }
-                        m_ProcessParameterUpdates.Clear();
-
                         // Only owners check for Animator changes
-                        if (m_NetworkAnimator.IsOwner && !m_NetworkAnimator.IsServerAuthoritative() || m_NetworkAnimator.IsServerAuthoritative() && m_NetworkAnimator.NetworkManager.IsServer)
+                        if ((m_NetworkAnimator.IsOwner && !m_NetworkAnimator.IsServerAuthoritative()) || (m_NetworkAnimator.IsServerAuthoritative() && m_NetworkAnimator.NetworkManager.IsServer))
                         {
                             m_NetworkAnimator.CheckForAnimatorChanges();
                         }
+                        else
+                        {
+                            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/2090
+                            foreach (var parameterUpdate in m_ProcessParameterUpdates)
+                            {
+                                m_NetworkAnimator.UpdateParameters(parameterUpdate);
+                            }
+                        }
+
+                        m_ProcessParameterUpdates.Clear();
+
                         break;
                     }
             }
@@ -540,6 +550,8 @@ namespace Unity.Netcode.Components
             {
                 m_ParameterWriter.Dispose();
             }
+
+            m_Initialized = false;
         }
 
         public override void OnDestroy()
@@ -561,6 +573,17 @@ namespace Unity.Netcode.Components
         internal AnimationMessage GetAnimationMessage()
         {
             return m_AnimationMessage;
+		}
+
+        private bool m_Initialized;
+
+        private void OnEnable()
+        {
+            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1757
+            if (IsSpawned && !m_Initialized)
+            {
+                OnNetworkSpawn();
+            }
         }
 
         // Only used in Cleanup
@@ -569,6 +592,12 @@ namespace Unity.Netcode.Components
         /// <inheritdoc/>
         public override void OnNetworkSpawn()
         {
+            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1757
+            if (!isActiveAndEnabled)
+            {
+                return;
+            }
+
             int layers = m_Animator.layerCount;
 
             // Initializing the below arrays for everyone handles an issue
@@ -653,6 +682,7 @@ namespace Unity.Netcode.Components
                 m_CachedAnimatorParameters[i] = cacheParam;
             }
             m_NetworkAnimatorStateChangeHandler = new NetworkAnimatorStateChangeHandler(this);
+            m_Initialized = true;
         }
 
         /// <inheritdoc/>
@@ -755,7 +785,7 @@ namespace Unity.Netcode.Components
         /// </summary>
         internal void CheckForAnimatorChanges()
         {
-            if (!IsOwner && !IsServerAuthoritative() || IsServerAuthoritative() && !IsServer)
+            if ((!IsOwner && !IsServerAuthoritative()) || (IsServerAuthoritative() && !IsServer))
             {
                 return;
             }
@@ -1153,8 +1183,14 @@ namespace Unity.Netcode.Components
         [ClientRpc]
         internal unsafe void SendParametersUpdateClientRpc(ParametersUpdateMessage parametersUpdate, ClientRpcParams clientRpcParams = default)
         {
+            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1757
+            if (!m_Initialized)
+            {
+                return;
+            }
+
             var isServerAuthoritative = IsServerAuthoritative();
-            if (!isServerAuthoritative && !IsOwner || isServerAuthoritative)
+            if ((!isServerAuthoritative && !IsOwner) || (isServerAuthoritative && !IsServer))
             {
                 m_NetworkAnimatorStateChangeHandler.ProcessParameterUpdate(parametersUpdate);
             }
@@ -1202,6 +1238,12 @@ namespace Unity.Netcode.Components
         [ClientRpc]
         private unsafe void SendAnimStateClientRpc(AnimationMessage animationMessage, ClientRpcParams clientRpcParams = default)
         {
+            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1757
+            if (!m_Initialized)
+            {
+                return;
+            }
+
             // This should never happen
             if (IsHost)
             {
@@ -1213,7 +1255,7 @@ namespace Unity.Netcode.Components
             }
 
             var isServerAuthoritative = IsServerAuthoritative();
-            if (!isServerAuthoritative && !IsOwner || isServerAuthoritative)
+            if ((!isServerAuthoritative && !IsOwner) || (isServerAuthoritative && !IsServer))
             {
                 foreach (var animationState in animationMessage.AnimationStates)
                 {
@@ -1287,6 +1329,12 @@ namespace Unity.Netcode.Components
         [ClientRpc]
         internal void SendAnimTriggerClientRpc(AnimationTriggerMessage animationTriggerMessage, ClientRpcParams clientRpcParams = default)
         {
+            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1757
+            if (!m_Initialized)
+            {
+                return;
+            }
+
             InternalSetTrigger(animationTriggerMessage.Hash, animationTriggerMessage.IsTriggerSet);
         }
 

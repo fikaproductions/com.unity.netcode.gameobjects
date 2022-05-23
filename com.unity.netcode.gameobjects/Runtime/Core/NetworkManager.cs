@@ -58,7 +58,7 @@ namespace Unity.Netcode
 
         internal void MarkNetworkObjectDirty(NetworkObject networkObject)
         {
-            BehaviourUpdater.AddForUpdate(networkObject);
+            BehaviourUpdater?.AddForUpdate(networkObject);
         }
 
         internal MessagingSystem MessagingSystem { get; private set; }
