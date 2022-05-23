@@ -8,7 +8,7 @@ namespace Unity.Netcode
     /// Used to override the LoadSceneAsync and UnloadSceneAsync methods called
     /// within the NetworkSceneManager.
     /// </summary>
-    internal interface ISceneManagerHandler
+    public interface ISceneManagerHandler
     {
         // Generic action to call when a scene is finished loading/unloading
         struct SceneEventAction
@@ -20,7 +20,7 @@ namespace Unity.Netcode
             /// invoke the SceneEventProgress once done loading
             /// </summary>
             internal Action Completed;
-            internal void Invoke()
+            public void Invoke()
             {
                 Completed?.Invoke();
                 EventAction.Invoke(SceneEventId);

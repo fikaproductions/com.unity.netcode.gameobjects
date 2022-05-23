@@ -40,6 +40,12 @@ namespace Unity.Netcode.Components
         /// <inheritdoc />
         public void NetworkUpdate(NetworkUpdateStage updateStage)
         {
+            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1757
+            if (!m_NetworkAnimator.isActiveAndEnabled)
+            {
+                return;
+            }
+
             switch (updateStage)
             {
                 case NetworkUpdateStage.PreUpdate:
@@ -51,18 +57,22 @@ namespace Unity.Netcode.Components
                             FlushMessages();
                         }
 
-                        // Everyone applies any parameters updated
-                        foreach (var parameterUpdate in m_ProcessParameterUpdates)
-                        {
-                            m_NetworkAnimator.UpdateParameters(parameterUpdate);
-                        }
-                        m_ProcessParameterUpdates.Clear();
-
                         // Only owners check for Animator changes
-                        if (m_NetworkAnimator.IsOwner && !m_NetworkAnimator.IsServerAuthoritative() || m_NetworkAnimator.IsServerAuthoritative() && m_NetworkAnimator.NetworkManager.IsServer)
+                        if ((m_NetworkAnimator.IsOwner && !m_NetworkAnimator.IsServerAuthoritative()) || (m_NetworkAnimator.IsServerAuthoritative() && m_NetworkAnimator.NetworkManager.IsServer))
                         {
                             m_NetworkAnimator.CheckForAnimatorChanges();
                         }
+                        else
+                        {
+                            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/2090
+                            foreach (var parameterUpdate in m_ProcessParameterUpdates)
+                            {
+                                m_NetworkAnimator.UpdateParameters(parameterUpdate);
+                            }
+                        }
+
+                        m_ProcessParameterUpdates.Clear();
+
                         break;
                     }
             }
@@ -281,6 +291,8 @@ namespace Unity.Netcode.Components
             {
                 m_ParameterWriter.Dispose();
             }
+
+            m_Initialized = false;
         }
 
         public override void OnDestroy()
@@ -292,9 +304,25 @@ namespace Unity.Netcode.Components
         private List<int> m_ParametersToUpdate;
         private List<ulong> m_ClientSendList;
         private ClientRpcParams m_ClientRpcParams;
+        private bool m_Initialized;
+
+        private void OnEnable()
+        {
+            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1757
+            if (IsSpawned && !m_Initialized)
+            {
+                OnNetworkSpawn();
+            }
+        }
 
         public override void OnNetworkSpawn()
         {
+            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1757
+            if (!isActiveAndEnabled)
+            {
+                return;
+            }
+
             if (IsOwner || IsServer)
             {
                 int layers = m_Animator.layerCount;
@@ -370,6 +398,7 @@ namespace Unity.Netcode.Components
                 m_CachedAnimatorParameters[i] = cacheParam;
             }
             m_NetworkAnimatorStateChangeHandler = new NetworkAnimatorStateChangeHandler(this);
+            m_Initialized = true;
         }
 
         public override void OnNetworkDespawn()
@@ -444,7 +473,7 @@ namespace Unity.Netcode.Components
 
         internal void CheckForAnimatorChanges()
         {
-            if (!IsOwner && !IsServerAuthoritative() || IsServerAuthoritative() && !IsServer)
+            if ((!IsOwner && !IsServerAuthoritative()) || (IsServerAuthoritative() && !IsServer))
             {
                 return;
             }
@@ -787,8 +816,14 @@ namespace Unity.Netcode.Components
         [ClientRpc]
         internal unsafe void SendParametersUpdateClientRpc(ParametersUpdateMessage parametersUpdate, ClientRpcParams clientRpcParams = default)
         {
+            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1757
+            if (!m_Initialized)
+            {
+                return;
+            }
+
             var isServerAuthoritative = IsServerAuthoritative();
-            if (!isServerAuthoritative && !IsOwner || isServerAuthoritative)
+            if ((!isServerAuthoritative && !IsOwner) || (isServerAuthoritative && !IsServer))
             {
                 m_NetworkAnimatorStateChangeHandler.ProcessParameterUpdate(parametersUpdate);
             }
@@ -830,8 +865,14 @@ namespace Unity.Netcode.Components
         [ClientRpc]
         private unsafe void SendAnimStateClientRpc(AnimationMessage animSnapshot, ClientRpcParams clientRpcParams = default)
         {
+            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1757
+            if (!m_Initialized)
+            {
+                return;
+            }
+
             var isServerAuthoritative = IsServerAuthoritative();
-            if (!isServerAuthoritative && !IsOwner || isServerAuthoritative)
+            if ((!isServerAuthoritative && !IsOwner) || (isServerAuthoritative && !IsServer))
             {
                 UpdateAnimationState(animSnapshot);
             }
@@ -879,8 +920,14 @@ namespace Unity.Netcode.Components
         [ClientRpc]
         internal void SendAnimTriggerClientRpc(AnimationTriggerMessage animationTriggerMessage, ClientRpcParams clientRpcParams = default)
         {
+            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1757
+            if (!m_Initialized)
+            {
+                return;
+            }
+
             var isServerAuthoritative = IsServerAuthoritative();
-            if (!isServerAuthoritative && !IsOwner || isServerAuthoritative)
+            if ((!isServerAuthoritative && !IsOwner) || (isServerAuthoritative && !IsServer))
             {
                 m_Animator.SetBool(animationTriggerMessage.Hash, animationTriggerMessage.IsTriggerSet);
             }
@@ -901,7 +948,7 @@ namespace Unity.Netcode.Components
         public void SetTrigger(int hash, bool setTrigger = true)
         {
             var isServerAuthoritative = IsServerAuthoritative();
-            if (IsOwner && !isServerAuthoritative || IsServer && isServerAuthoritative)
+            if ((IsOwner && !isServerAuthoritative) || (IsServer && isServerAuthoritative))
             {
                 var animTriggerMessage = new AnimationTriggerMessage() { Hash = hash, IsTriggerSet = setTrigger };
                 if (IsServer)

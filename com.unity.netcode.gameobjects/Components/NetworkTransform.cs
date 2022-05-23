@@ -366,14 +366,15 @@ namespace Unity.Netcode.Components
         /// </summary>
         protected NetworkManager m_CachedNetworkManager;
 
-        private readonly NetworkVariable<NetworkTransformState> m_ReplicatedNetworkState = new NetworkVariable<NetworkTransformState>(new NetworkTransformState());
-
-        private NetworkTransformState m_LocalAuthoritativeNetworkState;
+        // [PATCH] Allow NetworkTransform derivatives to update their local network state upon ownership changes.
+        private protected readonly NetworkVariable<NetworkTransformState> m_ReplicatedNetworkState = new NetworkVariable<NetworkTransformState>(new NetworkTransformState());
+        private protected NetworkTransformState m_LocalAuthoritativeNetworkState;
 
         private const int k_DebugDrawLineTime = 10;
 
-        private bool m_HasSentLastValue = false; // used to send one last value, so clients can make the difference between lost replication data (clients extrapolate) and no more data to send.
-
+        private bool m_Awoken; // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1757
+        private bool m_ShouldResetInterpolatorsOnEnable; // [PATCH] Allow NetworkTransform to be managed locally by disabling it.
+        protected bool m_HasSentLastValue = false; // used to send one last value, so clients can make the difference between lost replication data (clients extrapolate) and no more data to send.
 
         private BufferedLinearInterpolator<float> m_PositionXInterpolator; // = new BufferedLinearInterpolatorFloat();
         private BufferedLinearInterpolator<float> m_PositionYInterpolator; // = new BufferedLinearInterpolatorFloat();
@@ -476,6 +477,16 @@ namespace Unity.Netcode.Components
             m_ScaleXInterpolator.ResetTo(m_LocalAuthoritativeNetworkState.ScaleX, serverTime);
             m_ScaleYInterpolator.ResetTo(m_LocalAuthoritativeNetworkState.ScaleY, serverTime);
             m_ScaleZInterpolator.ResetTo(m_LocalAuthoritativeNetworkState.ScaleZ, serverTime);
+        }
+
+        // [PATCH] Allow NetworkTransform interpolators to be reset to local position. Useful when managed locally.
+        protected void ResetInterpolatedPositionToLocalTransformPosition()
+        {
+            var serverTime = NetworkManager.ServerTime.Time;
+
+            m_PositionXInterpolator.ResetTo(transform.position.x, serverTime);
+            m_PositionYInterpolator.ResetTo(transform.position.y, serverTime);
+            m_PositionZInterpolator.ResetTo(transform.position.z, serverTime);
         }
 
         /// <summary>
@@ -823,31 +834,53 @@ namespace Unity.Netcode.Components
 
         private void Awake()
         {
-            // we only want to create our interpolators during Awake so that, when pooled, we do not create tons
-            //  of gc thrash each time objects wink out and are re-used
-            m_PositionXInterpolator = new BufferedLinearInterpolatorFloat();
-            m_PositionYInterpolator = new BufferedLinearInterpolatorFloat();
-            m_PositionZInterpolator = new BufferedLinearInterpolatorFloat();
-            m_RotationInterpolator = new BufferedLinearInterpolatorQuaternion(); // rotation is a single Quaternion since each euler axis will affect the quaternion's final value
-            m_ScaleXInterpolator = new BufferedLinearInterpolatorFloat();
-            m_ScaleYInterpolator = new BufferedLinearInterpolatorFloat();
-            m_ScaleZInterpolator = new BufferedLinearInterpolatorFloat();
-
-            if (m_AllFloatInterpolators.Count == 0)
+            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1757
+            if (!m_Awoken)
             {
-                m_AllFloatInterpolators.Add(m_PositionXInterpolator);
-                m_AllFloatInterpolators.Add(m_PositionYInterpolator);
-                m_AllFloatInterpolators.Add(m_PositionZInterpolator);
-                m_AllFloatInterpolators.Add(m_ScaleXInterpolator);
-                m_AllFloatInterpolators.Add(m_ScaleYInterpolator);
-                m_AllFloatInterpolators.Add(m_ScaleZInterpolator);
+                // we only want to create our interpolators during Awake so that, when pooled, we do not create tons
+                //  of gc thrash each time objects wink out and are re-used
+                m_PositionXInterpolator = new BufferedLinearInterpolatorFloat();
+                m_PositionYInterpolator = new BufferedLinearInterpolatorFloat();
+                m_PositionZInterpolator = new BufferedLinearInterpolatorFloat();
+                m_RotationInterpolator = new BufferedLinearInterpolatorQuaternion(); // rotation is a single Quaternion since each euler axis will affect the quaternion's final value
+                m_ScaleXInterpolator = new BufferedLinearInterpolatorFloat();
+                m_ScaleYInterpolator = new BufferedLinearInterpolatorFloat();
+                m_ScaleZInterpolator = new BufferedLinearInterpolatorFloat();
+
+                if (m_AllFloatInterpolators.Count == 0)
+                {
+                    m_AllFloatInterpolators.Add(m_PositionXInterpolator);
+                    m_AllFloatInterpolators.Add(m_PositionYInterpolator);
+                    m_AllFloatInterpolators.Add(m_PositionZInterpolator);
+                    m_AllFloatInterpolators.Add(m_ScaleXInterpolator);
+                    m_AllFloatInterpolators.Add(m_ScaleYInterpolator);
+                    m_AllFloatInterpolators.Add(m_ScaleZInterpolator);
+                }
+
+                m_Awoken = true;
             }
         }
+
+        private void OnEnable()
+        {
+            // [PATCH] Allow NetworkTransform to be managed locally by disabling it.
+            if (m_ShouldResetInterpolatorsOnEnable)
+            {
+                ResetInterpolatedPositionToLocalTransformPosition();
+                m_ShouldResetInterpolatorsOnEnable = false;
+            }
+        }
+
+        // [PATCH] Allow NetworkTransform to be managed locally by disabling it.
+        private void OnDisable() => m_ShouldResetInterpolatorsOnEnable = true;
 
 
         /// <inheritdoc/>
         public override void OnNetworkSpawn()
         {
+            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1757
+            Awake();
+
             // must set up m_Transform in OnNetworkSpawn because it's possible an object spawns but is disabled
             //  and thus awake won't be called.
             // TODO: investigate further on not sending data for something that is not enabled
@@ -878,12 +911,18 @@ namespace Unity.Netcode.Components
         /// <inheritdoc/>
         public override void OnGainedOwnership()
         {
+            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1757
+            Awake();
+
             Initialize();
         }
 
         /// <inheritdoc/>
         public override void OnLostOwnership()
         {
+            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1757
+            Awake();
+
             Initialize();
         }
 
