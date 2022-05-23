@@ -6,7 +6,7 @@ using UnityEditor;
 
 namespace Unity.Netcode.Editor
 {
-    [CustomEditor(typeof(NetworkBehaviour), true)]
+    [CustomEditor(typeof(NetworkBehaviour), true, isFallback = true)]
     [CanEditMultipleObjects]
     public class NetworkBehaviourEditor : UnityEditor.Editor
     {
@@ -255,6 +255,8 @@ namespace Unity.Netcode.Editor
         /// <param name="networkObjectRemoved">used internally</param>
         public static void CheckForNetworkObject(GameObject gameObject, bool networkObjectRemoved = false)
         {
+            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1921
+            /*
             // If there are no NetworkBehaviours or no gameObject, then exit early
             if (gameObject == null || (gameObject.GetComponent<NetworkBehaviour>() == null && gameObject.GetComponentInChildren<NetworkBehaviour>() == null))
             {
@@ -328,6 +330,7 @@ namespace Unity.Netcode.Editor
                     }
                 }
             }
+            */
         }
 
         /// <summary>

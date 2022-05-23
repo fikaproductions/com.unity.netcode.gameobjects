@@ -15,7 +15,7 @@ namespace Unity.Netcode
     {
         [HideInInspector]
         [SerializeField]
-        internal uint GlobalObjectIdHash;
+        public uint GlobalObjectIdHash;
 
 #if UNITY_EDITOR
         private void OnValidate()
@@ -554,14 +554,15 @@ namespace Unity.Netcode
 
             for (int i = 0; i < ChildNetworkBehaviours.Count; i++)
             {
-                if (ChildNetworkBehaviours[i].gameObject.activeInHierarchy)
-                {
-                    ChildNetworkBehaviours[i].InternalOnGainedOwnership();
-                }
-                else
-                {
-                    Debug.LogWarning($"{ChildNetworkBehaviours[i].gameObject.name} is disabled! Netcode for GameObjects does not support disabled NetworkBehaviours! The {ChildNetworkBehaviours[i].GetType().Name} component was skipped during ownership assignment!");
-                }
+                // [PATCH] Allow deactivated NetworkBehaviours.
+                // if (ChildNetworkBehaviours[i].gameObject.activeInHierarchy)
+                // {
+                ChildNetworkBehaviours[i].InternalOnGainedOwnership();
+                // }
+                // else
+                // {
+                //     Debug.LogWarning($"{ChildNetworkBehaviours[i].gameObject.name} is disabled! Netcode for GameObjects does not support disabled NetworkBehaviours! The {ChildNetworkBehaviours[i].GetType().Name} component was skipped during ownership assignment!");
+                // }
             }
         }
 
@@ -813,21 +814,23 @@ namespace Unity.Netcode
 
             for (int i = 0; i < ChildNetworkBehaviours.Count; i++)
             {
-                if (ChildNetworkBehaviours[i].gameObject.activeInHierarchy)
-                {
-                    ChildNetworkBehaviours[i].InternalOnNetworkSpawn();
-                }
-                else
-                {
-                    Debug.LogWarning($"{ChildNetworkBehaviours[i].gameObject.name} is disabled! Netcode for GameObjects does not support spawning disabled NetworkBehaviours! The {ChildNetworkBehaviours[i].GetType().Name} component was skipped during spawn!");
-                }
+                // [PATCH] Allow deactivated NetworkBehaviours.
+                // if (ChildNetworkBehaviours[i].gameObject.activeInHierarchy)
+                // {
+                ChildNetworkBehaviours[i].InternalOnNetworkSpawn();
+                // }
+                // else
+                // {
+                //     Debug.LogWarning($"{ChildNetworkBehaviours[i].gameObject.name} is disabled! Netcode for GameObjects does not support spawning disabled NetworkBehaviours! The {ChildNetworkBehaviours[i].GetType().Name} component was skipped during spawn!");
+                // }
             }
             for (int i = 0; i < ChildNetworkBehaviours.Count; i++)
             {
-                if (ChildNetworkBehaviours[i].gameObject.activeInHierarchy)
-                {
-                    ChildNetworkBehaviours[i].VisibleOnNetworkSpawn();
-                }
+                // [PATCH] Allow deactivated NetworkBehaviours.
+                //if (ChildNetworkBehaviours[i].gameObject.activeInHierarchy)
+                //{
+                ChildNetworkBehaviours[i].VisibleOnNetworkSpawn();
+                //}
             }
         }
 
@@ -1248,7 +1251,9 @@ namespace Unity.Netcode
                 {
                     NetworkLog.LogWarning($"{nameof(NetworkBehaviour)}-{networkBehaviour.name} is being destroyed while {nameof(NetworkObject)}-{name} is still spawned! (could break state synchronization)");
                 }
-                ChildNetworkBehaviours.Remove(networkBehaviour);
+
+                // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/2188
+                // ChildNetworkBehaviours.Remove(networkBehaviour);
             }
         }
     }

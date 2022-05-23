@@ -93,7 +93,8 @@ namespace Unity.Netcode
 
         protected virtual void PurgeTrigger(IDeferredMessageManager.TriggerType triggerType, ulong key, TriggerInfo triggerInfo)
         {
-            if (NetworkLog.CurrentLogLevel <= LogLevel.Normal)
+            // [PATCH] Silence warnings of RPCs received before spawn call is processed.
+            if (NetworkLog.CurrentLogLevel <= LogLevel.Developer)
             {
                 NetworkLog.LogWarning($"Deferred messages were received for a trigger of type {triggerType} with key {key}, but that trigger was not received within within {m_NetworkManager.NetworkConfig.SpawnTimeout} second(s).");
             }

@@ -438,6 +438,9 @@ namespace Unity.Netcode.Components
         // This represents the most recent local authoritative state.
         private NetworkTransformState m_LocalAuthoritativeNetworkState;
 
+        private bool m_Awoken; // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1757
+        private bool m_ShouldResetInterpolatorsOnEnable; // [PATCH] Allow NetworkTransform to be managed locally by disabling it.
+
         private ClientRpcParams m_ClientRpcParams = new ClientRpcParams() { Send = new ClientRpcSendParams() };
         private List<ulong> m_ClientIds = new List<ulong>() { 0 };
 
@@ -559,6 +562,16 @@ namespace Unity.Netcode.Components
             m_ScaleXInterpolator.ResetTo(transform.localScale.x, serverTime);
             m_ScaleYInterpolator.ResetTo(transform.localScale.y, serverTime);
             m_ScaleZInterpolator.ResetTo(transform.localScale.z, serverTime);
+        }
+
+        // [PATCH] Allow NetworkTransform interpolators to be reset to local position. Useful when managed locally.
+        protected void ResetInterpolatedPositionToLocalTransformPosition()
+        {
+            var serverTime = NetworkManager.ServerTime.Time;
+
+            m_PositionXInterpolator.ResetTo(transform.position.x, serverTime);
+            m_PositionYInterpolator.ResetTo(transform.position.y, serverTime);
+            m_PositionZInterpolator.ResetTo(transform.position.z, serverTime);
         }
 
         /// <summary>
@@ -985,20 +998,40 @@ namespace Unity.Netcode.Components
         /// </summary>
         private void Awake()
         {
-            // Rotation is a single Quaternion since each Euler axis will affect the quaternion's final value
-            m_RotationInterpolator = new BufferedLinearInterpolatorQuaternion();
+            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1757
+            if (!m_Awoken)
+            {
+                // Rotation is a single Quaternion since each Euler axis will affect the quaternion's final value
+                m_RotationInterpolator = new BufferedLinearInterpolatorQuaternion();
+                
+                // All other interpolators are BufferedLinearInterpolatorFloats
+                m_PositionXInterpolator = new BufferedLinearInterpolatorFloat();
+                m_PositionYInterpolator = new BufferedLinearInterpolatorFloat();
+                m_PositionZInterpolator = new BufferedLinearInterpolatorFloat();
+                m_ScaleXInterpolator = new BufferedLinearInterpolatorFloat();
+                m_ScaleYInterpolator = new BufferedLinearInterpolatorFloat();
+                m_ScaleZInterpolator = new BufferedLinearInterpolatorFloat();
 
-            // All other interpolators are BufferedLinearInterpolatorFloats
-            m_PositionXInterpolator = new BufferedLinearInterpolatorFloat();
-            m_PositionYInterpolator = new BufferedLinearInterpolatorFloat();
-            m_PositionZInterpolator = new BufferedLinearInterpolatorFloat();
-            m_ScaleXInterpolator = new BufferedLinearInterpolatorFloat();
-            m_ScaleYInterpolator = new BufferedLinearInterpolatorFloat();
-            m_ScaleZInterpolator = new BufferedLinearInterpolatorFloat();
+                // Used to quickly iteration over the BufferedLinearInterpolatorFloat
+                // instances
+                if (m_AllFloatInterpolators.Count == 0)
+                {
+                    m_AllFloatInterpolators.Add(m_PositionXInterpolator);
+                    m_AllFloatInterpolators.Add(m_PositionYInterpolator);
+                    m_AllFloatInterpolators.Add(m_PositionZInterpolator);
+                    m_AllFloatInterpolators.Add(m_ScaleXInterpolator);
+                    m_AllFloatInterpolators.Add(m_ScaleYInterpolator);
+                    m_AllFloatInterpolators.Add(m_ScaleZInterpolator);
+                }
 
-            // Used to quickly iteration over the BufferedLinearInterpolatorFloat
-            // instances
-            if (m_AllFloatInterpolators.Count == 0)
+                m_Awoken = true;
+            }
+        }
+
+        private void OnEnable()
+        {
+            // [PATCH] Allow NetworkTransform to be managed locally by disabling it.
+            if (m_ShouldResetInterpolatorsOnEnable)
             {
                 m_AllFloatInterpolators.Add(m_PositionXInterpolator);
                 m_AllFloatInterpolators.Add(m_PositionYInterpolator);
@@ -1006,12 +1039,21 @@ namespace Unity.Netcode.Components
                 m_AllFloatInterpolators.Add(m_ScaleXInterpolator);
                 m_AllFloatInterpolators.Add(m_ScaleYInterpolator);
                 m_AllFloatInterpolators.Add(m_ScaleZInterpolator);
+                ResetInterpolatedPositionToLocalTransformPosition();
+                m_ShouldResetInterpolatorsOnEnable = false;
             }
         }
+
+        // [PATCH] Allow NetworkTransform to be managed locally by disabling it.
+        private void OnDisable() => m_ShouldResetInterpolatorsOnEnable = true;
+
 
         /// <inheritdoc/>
         public override void OnNetworkSpawn()
         {
+            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1757
+            Awake();
+
             m_CachedIsServer = IsServer;
             m_CachedNetworkManager = NetworkManager;
             m_TickFrequency = 1.0 / NetworkManager.NetworkConfig.TickRate;
@@ -1050,12 +1092,18 @@ namespace Unity.Netcode.Components
         /// <inheritdoc/>
         public override void OnGainedOwnership()
         {
+            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1757
+            Awake();
+
             Initialize();
         }
 
         /// <inheritdoc/>
         public override void OnLostOwnership()
         {
+            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1757
+            Awake();
+
             Initialize();
         }
 
