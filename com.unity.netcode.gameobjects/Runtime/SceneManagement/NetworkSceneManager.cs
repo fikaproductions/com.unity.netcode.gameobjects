@@ -392,9 +392,19 @@ namespace Unity.Netcode
         internal Dictionary<uint, int> HashToBuildIndex = new Dictionary<uint, int>();
 
         /// <summary>
+        /// Hash to external scene name lookup table
+        /// </summary>
+        internal Dictionary<uint, string> HashToExternalSceneName = new Dictionary<uint, string>();
+
+        /// <summary>
         /// Build index to hash lookup table
         /// </summary>
         internal Dictionary<int, uint> BuildIndexToHash = new Dictionary<int, uint>();
+
+        /// <summary>
+        /// External scene name to hash lookup table
+        /// </summary>
+        internal Dictionary<string, uint> ExternalSceneNameToHash = new Dictionary<string, uint>();
 
         /// <summary>
         /// The Condition: While a scene is asynchronously loaded in single loading scene mode, if any new NetworkObjects are spawned
@@ -493,6 +503,7 @@ namespace Unity.Netcode
         {
             HashToBuildIndex.Clear();
             BuildIndexToHash.Clear();
+
             for (int i = 0; i < SceneManager.sceneCountInBuildSettings; i++)
             {
                 var scenePath = SceneUtility.GetScenePathByBuildIndex(i);
@@ -514,6 +525,31 @@ namespace Unity.Netcode
         }
 
         /// <summary>
+        /// Register scene from outside of build (e.g. from an Addressables group).
+        /// </summary>
+        /// <param name="sceneNames">The name of the external scenes to register.</param>
+        public void RegisterExternalScenes(string[] sceneNames)
+        {
+            HashToExternalSceneName.Clear();
+            ExternalSceneNameToHash.Clear();
+
+            foreach (var sceneName in sceneNames)
+            {
+                var hash = XXHash.Hash32(sceneName);
+
+                if (!HashToExternalSceneName.ContainsKey(hash))
+                {
+                    HashToExternalSceneName.Add(hash, sceneName);
+                    ExternalSceneNameToHash.Add(sceneName, hash);
+                }
+                else
+                {
+                    Debug.LogError($"{nameof(NetworkSceneManager)} is skipping duplicate external scene name entry {sceneName}. Make sure your external scenes registered list does not contain duplicates!");
+                }
+            }
+        }
+
+        /// <summary>
         /// Gets the scene name from a hash value generated from the full scene path
         /// </summary>
         internal string SceneNameFromHash(uint sceneHash)
@@ -526,17 +562,29 @@ namespace Unity.Netcode
             {
                 return "No Scene";
             }
-            return GetSceneNameFromPath(ScenePathFromHash(sceneHash));
+
+            if (TryGetScenePathFromHash(sceneHash, out var scenePath))
+            {
+                return GetSceneNameFromPath(scenePath);
+            }
+
+            return HashToExternalSceneName[sceneHash];
         }
 
         /// <summary>
         /// Gets the full scene path from a hash value
         /// </summary>
-        internal string ScenePathFromHash(uint sceneHash)
+        internal bool TryGetScenePathFromHash(uint sceneHash, out string scenePath)
         {
             if (HashToBuildIndex.ContainsKey(sceneHash))
             {
-                return SceneUtility.GetScenePathByBuildIndex(HashToBuildIndex[sceneHash]);
+                scenePath = SceneUtility.GetScenePathByBuildIndex(HashToBuildIndex[sceneHash]);
+                return true;
+            }
+            else if (HashToExternalSceneName.ContainsKey(sceneHash))
+            {
+                scenePath = null;
+                return false;
             }
             else
             {
@@ -546,11 +594,11 @@ namespace Unity.Netcode
         }
 
         /// <summary>
-        /// Gets the associated hash value for the scene name or path
+        /// Gets the associated hash value for the scene name
         /// </summary>
-        internal uint SceneHashFromNameOrPath(string sceneNameOrPath)
+        internal uint SceneHashFromName(string sceneName)
         {
-            var buildIndex = SceneUtility.GetBuildIndexByScenePath(sceneNameOrPath);
+            var buildIndex = SceneUtility.GetBuildIndexByScenePath(sceneName);
             if (buildIndex >= 0)
             {
                 if (BuildIndexToHash.ContainsKey(buildIndex))
@@ -559,12 +607,16 @@ namespace Unity.Netcode
                 }
                 else
                 {
-                    throw new Exception($"Scene '{sceneNameOrPath}' has a build index of {buildIndex} that does not exist in the {nameof(BuildIndexToHash)} table!");
+                    throw new Exception($"Scene '{sceneName}' has a build index of {buildIndex} that does not exist in the {nameof(BuildIndexToHash)} table!");
                 }
+            }
+            else if (ExternalSceneNameToHash.ContainsKey(sceneName))
+            {
+                return ExternalSceneNameToHash[sceneName];
             }
             else
             {
-                throw new Exception($"Scene '{sceneNameOrPath}' couldn't be loaded because it has not been added to the build settings scenes in build list.");
+                throw new Exception($"Scene '{sceneName}' couldn't be loaded because it has not been added to the build settings scenes in build list or registered as an external scene.");
             }
         }
 
@@ -847,15 +899,15 @@ namespace Unity.Netcode
             }
 
             // Return invalid scene name status if the scene name is invalid
-            if (SceneUtility.GetBuildIndexByScenePath(sceneName) == InvalidSceneNameOrPath)
+            if (SceneUtility.GetBuildIndexByScenePath(sceneName) == InvalidSceneNameOrPath && !ExternalSceneNameToHash.ContainsKey(sceneName))
             {
-                Debug.LogError($"Scene '{sceneName}' couldn't be loaded because it has not been added to the build settings scenes in build list.");
+                Debug.LogError($"Scene '{sceneName}' couldn't be loaded because it has not been added to the build settings scenes in build list or has not been registered as an external scene.");
                 return new SceneEventProgress(null, SceneEventProgressStatus.InvalidSceneName);
             }
 
             var sceneEventProgress = new SceneEventProgress(m_NetworkManager)
             {
-                SceneHash = SceneHashFromNameOrPath(sceneName)
+                SceneHash = SceneHashFromName(sceneName)
             };
 
             SceneEventProgressTracking.Add(sceneEventProgress.Guid, sceneEventProgress);
@@ -960,7 +1012,7 @@ namespace Unity.Netcode
             var sceneEventData = BeginSceneEvent();
             sceneEventData.SceneEventProgressId = sceneEventProgress.Guid;
             sceneEventData.SceneEventType = SceneEventType.Unload;
-            sceneEventData.SceneHash = SceneHashFromNameOrPath(sceneName);
+            sceneEventData.SceneHash = SceneHashFromName(sceneName);
             sceneEventData.LoadSceneMode = LoadSceneMode.Additive; // The only scenes unloaded are scenes that were additively loaded
             sceneEventData.SceneHandle = sceneHandle;
 
@@ -1153,7 +1205,7 @@ namespace Unity.Netcode
             // Now set up the current scene event
             sceneEventData.SceneEventProgressId = sceneEventProgress.Guid;
             sceneEventData.SceneEventType = SceneEventType.Load;
-            sceneEventData.SceneHash = SceneHashFromNameOrPath(sceneName);
+            sceneEventData.SceneHash = SceneHashFromName(sceneName);
             sceneEventData.LoadSceneMode = loadSceneMode;
             var sceneEventId = sceneEventData.SceneEventId;
             // This both checks to make sure the scene is valid and if not resets the active scene event
@@ -1428,7 +1480,7 @@ namespace Unity.Netcode
             {
                 var scene = SceneManager.GetSceneAt(i);
 
-                var sceneHash = SceneHashFromNameOrPath(scene.path);
+                var sceneHash = SceneHashFromName(scene.name);
 
                 // This would depend upon whether we are additive or not
                 // If we are the base scene, then we set the root scene index;

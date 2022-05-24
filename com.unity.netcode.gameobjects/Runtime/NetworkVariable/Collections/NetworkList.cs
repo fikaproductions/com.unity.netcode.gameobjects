@@ -11,7 +11,6 @@ namespace Unity.Netcode
     public class NetworkList<T> : NetworkVariableSerialization<T> where T : unmanaged, IEquatable<T>
     {
         private NativeList<T> m_List = new NativeList<T>(64, Allocator.Persistent);
-        private NativeList<T> m_ListAtLastReset = new NativeList<T>(64, Allocator.Persistent);
         private NativeList<NetworkListEvent<T>> m_DirtyEvents = new NativeList<NetworkListEvent<T>>(64, Allocator.Persistent);
 
         /// <summary>
@@ -42,11 +41,7 @@ namespace Unity.Netcode
         public override void ResetDirty()
         {
             base.ResetDirty();
-            if (m_DirtyEvents.Length > 0)
-            {
-                m_DirtyEvents.Clear();
-                m_ListAtLastReset.CopyFrom(m_List);
-            }
+            m_DirtyEvents.Clear();
         }
 
         /// <inheritdoc />
@@ -59,7 +54,6 @@ namespace Unity.Netcode
         /// <inheritdoc />
         public override void WriteDelta(FastBufferWriter writer)
         {
-
             if (base.IsDirty())
             {
                 writer.WriteValueSafe((ushort)1);
@@ -114,10 +108,11 @@ namespace Unity.Netcode
         /// <inheritdoc />
         public override void WriteField(FastBufferWriter writer)
         {
-            writer.WriteValueSafe((ushort)m_ListAtLastReset.Length);
-            for (int i = 0; i < m_ListAtLastReset.Length; i++)
+            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1983
+            writer.WriteValueSafe((ushort)m_List.Length);
+            for (int i = 0; i < m_List.Length; i++)
             {
-                Write(writer, m_ListAtLastReset[i]);
+                Write(writer, m_List[i]);
             }
         }
 
@@ -459,7 +454,6 @@ namespace Unity.Netcode
         public override void Dispose()
         {
             m_List.Dispose();
-            m_ListAtLastReset.Dispose();
             m_DirtyEvents.Dispose();
         }
     }
