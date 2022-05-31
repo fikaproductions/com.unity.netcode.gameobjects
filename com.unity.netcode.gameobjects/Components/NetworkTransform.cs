@@ -287,11 +287,12 @@ namespace Unity.Netcode.Components
         private const int k_DebugDrawLineTime = 10;
 
         private bool m_Awoken; // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1757
+        private bool m_ShouldResetInterpolatorsOnEnable; // [PATCH] Allow NetworkTransform to be managed locally by disabling it.
         protected bool m_HasSentLastValue = false; // used to send one last value, so clients can make the difference between lost replication data (clients extrapolate) and no more data to send.
 
-        protected BufferedLinearInterpolator<float> m_PositionXInterpolator; // = new BufferedLinearInterpolatorFloat();
-        protected BufferedLinearInterpolator<float> m_PositionYInterpolator; // = new BufferedLinearInterpolatorFloat();
-        protected BufferedLinearInterpolator<float> m_PositionZInterpolator; // = new BufferedLinearInterpolatorFloat();
+        private BufferedLinearInterpolator<float> m_PositionXInterpolator; // = new BufferedLinearInterpolatorFloat();
+        private BufferedLinearInterpolator<float> m_PositionYInterpolator; // = new BufferedLinearInterpolatorFloat();
+        private BufferedLinearInterpolator<float> m_PositionZInterpolator; // = new BufferedLinearInterpolatorFloat();
         private BufferedLinearInterpolator<Quaternion> m_RotationInterpolator; // = new BufferedLinearInterpolatorQuaternion(); // rotation is a single Quaternion since each euler axis will affect the quaternion's final value
         private BufferedLinearInterpolator<float> m_ScaleXInterpolator; // = new BufferedLinearInterpolatorFloat();
         private BufferedLinearInterpolator<float> m_ScaleYInterpolator; // = new BufferedLinearInterpolatorFloat();
@@ -390,6 +391,16 @@ namespace Unity.Netcode.Components
             m_ScaleXInterpolator.ResetTo(m_LocalAuthoritativeNetworkState.ScaleX, serverTime);
             m_ScaleYInterpolator.ResetTo(m_LocalAuthoritativeNetworkState.ScaleY, serverTime);
             m_ScaleZInterpolator.ResetTo(m_LocalAuthoritativeNetworkState.ScaleZ, serverTime);
+        }
+
+        // [PATCH] Allow NetworkTransform interpolators to be reset to local position. Useful when managed locally.
+        protected void ResetInterpolatedPositionToLocalTransformPosition()
+        {
+            var serverTime = NetworkManager.ServerTime.Time;
+
+            m_PositionXInterpolator.ResetTo(transform.position.x, serverTime);
+            m_PositionYInterpolator.ResetTo(transform.position.y, serverTime);
+            m_PositionZInterpolator.ResetTo(transform.position.z, serverTime);
         }
 
         /// <summary>
@@ -759,6 +770,19 @@ namespace Unity.Netcode.Components
                 m_Awoken = true;
             }
         }
+
+        private void OnEnable()
+        {
+            // [PATCH] Allow NetworkTransform to be managed locally by disabling it.
+            if (m_ShouldResetInterpolatorsOnEnable)
+            {
+                ResetInterpolatedPositionToLocalTransformPosition();
+                m_ShouldResetInterpolatorsOnEnable = false;
+            }
+        }
+
+        // [PATCH] Allow NetworkTransform to be managed locally by disabling it.
+        private void OnDisable() => m_ShouldResetInterpolatorsOnEnable = true;
 
         public override void OnNetworkSpawn()
         {
