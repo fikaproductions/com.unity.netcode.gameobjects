@@ -97,6 +97,20 @@ namespace Unity.Netcode
             return -1;
         }
 
+        public static T[] ToArray<T>(this NetworkList<T> self) where T : unmanaged, IEquatable<T>
+        {
+            var array = new T[self.Count];
+            var index = 0;
+
+            foreach (var item in self)
+            {
+                array[index] = item;
+                index++;
+            }
+
+            return array;
+        }
+
         public static void UpdateList<T>(this NetworkList<T> self, IList<T> target) where T : unmanaged, IEquatable<T>
         {
             var index = 0;
@@ -121,38 +135,8 @@ namespace Unity.Netcode
             }
         }
 
-        public static void UpdateList<T>(this NetworkList<NetworkBehaviourReference> self, IList<T> target) where T : NetworkBehaviour
-        {
-            var index = 0;
-
-            foreach (var item in self)
-            {
-                if (item.TryGet(out T behaviour))
-                {
-                    if (index < target.Count)
-                    {
-                        target[index] = behaviour;
-                    }
-                    else
-                    {
-                        target.Add(behaviour);
-                    }
-
-                    index++;
-                }
-            }
-
-            if (index < target.Count)
-            {
-                target.RemoveAt(index);
-            }
-        }
-
         public static NetworkList<T>.OnListChangedDelegate GetListUpdator<T>(this NetworkList<T> self, IList<T> target) where T : unmanaged, IEquatable<T> =>
            (NetworkListEvent<T> _) => UpdateList(self, target);
-
-        public static NetworkList<NetworkBehaviourReference>.OnListChangedDelegate GetListUpdator<T>(this NetworkList<NetworkBehaviourReference> self, IList<T> target) where T : NetworkBehaviour =>
-            (NetworkListEvent<NetworkBehaviourReference> _) => UpdateList(self, target);
 
         public static void Upsert<T>(this NetworkList<T> self, int index, T item) where T : unmanaged, IEquatable<T>
         {
