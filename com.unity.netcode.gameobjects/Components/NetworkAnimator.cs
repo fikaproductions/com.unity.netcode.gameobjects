@@ -63,6 +63,8 @@ namespace Unity.Netcode.Components
         private int[] m_AnimationHash;
         private float[] m_LayerWeights;
 
+        private bool initialized;
+
         private unsafe struct AnimatorParamCache
         {
             internal int Hash;
@@ -98,70 +100,17 @@ namespace Unity.Netcode.Components
 
             m_ParameterWriter.Dispose();
         }
-
         public override void OnNetworkSpawn()
         {
-            if (IsServer)
+            if (isActiveAndEnabled)
             {
-                m_SendMessagesAllowed = true;
-                int layers = m_Animator.layerCount;
-
-                m_TransitionHash = new int[layers];
-                m_AnimationHash = new int[layers];
-                m_LayerWeights = new float[layers];
-            }
-
-            var parameters = m_Animator.parameters;
-            m_CachedAnimatorParameters = new NativeArray<AnimatorParamCache>(parameters.Length, Allocator.Persistent);
-
-            for (var i = 0; i < parameters.Length; i++)
-            {
-                var parameter = parameters[i];
-
-                if (m_Animator.IsParameterControlledByCurve(parameter.nameHash))
-                {
-                    // we are ignoring parameters that are controlled by animation curves - syncing the layer
-                    //  states indirectly syncs the values that are driven by the animation curves
-                    continue;
-                }
-
-                var cacheParam = new AnimatorParamCache
-                {
-                    Type = UnsafeUtility.EnumToInt(parameter.type),
-                    Hash = parameter.nameHash
-                };
-
-                unsafe
-                {
-                    switch (parameter.type)
-                    {
-                        case AnimatorControllerParameterType.Float:
-                            var value = m_Animator.GetFloat(cacheParam.Hash);
-                            UnsafeUtility.WriteArrayElement(cacheParam.Value, 0, value);
-                            break;
-                        case AnimatorControllerParameterType.Int:
-                            var valueInt = m_Animator.GetInteger(cacheParam.Hash);
-                            UnsafeUtility.WriteArrayElement(cacheParam.Value, 0, valueInt);
-
-                            break;
-                        case AnimatorControllerParameterType.Bool:
-                            var valueBool = m_Animator.GetBool(cacheParam.Hash);
-                            UnsafeUtility.WriteArrayElement(cacheParam.Value, 0, valueBool);
-                            break;
-                        case AnimatorControllerParameterType.Trigger:
-                        default:
-                            break;
-                    }
-                }
-
-                m_CachedAnimatorParameters[i] = cacheParam;
+                OnEnable();
             }
         }
 
-        public override void OnNetworkDespawn()
-        {
-            m_SendMessagesAllowed = false;
-        }
+        private void OnEnable() => Initialize();
+
+        public override void OnNetworkDespawn() => m_SendMessagesAllowed = false;
 
         private void FixedUpdate()
         {
@@ -194,6 +143,70 @@ namespace Unity.Netcode.Components
                 animMsg.Parameters = m_ParameterWriter.ToArray();
 
                 SendAnimStateClientRpc(animMsg);
+            }
+        }
+
+        private void Initialize()
+        {
+            if (IsSpawned && !initialized)
+            {
+                if (IsServer)
+                {
+                    m_SendMessagesAllowed = true;
+                    int layers = m_Animator.layerCount;
+
+                    m_TransitionHash = new int[layers];
+                    m_AnimationHash = new int[layers];
+                    m_LayerWeights = new float[layers];
+                }
+
+                var parameters = m_Animator.parameters;
+                m_CachedAnimatorParameters = new NativeArray<AnimatorParamCache>(parameters.Length, Allocator.Persistent);
+
+                for (var i = 0; i < parameters.Length; i++)
+                {
+                    var parameter = parameters[i];
+
+                    if (m_Animator.IsParameterControlledByCurve(parameter.nameHash))
+                    {
+                        // we are ignoring parameters that are controlled by animation curves - syncing the layer
+                        //  states indirectly syncs the values that are driven by the animation curves
+                        continue;
+                    }
+
+                    var cacheParam = new AnimatorParamCache
+                    {
+                        Type = UnsafeUtility.EnumToInt(parameter.type),
+                        Hash = parameter.nameHash
+                    };
+
+                    unsafe
+                    {
+                        switch (parameter.type)
+                        {
+                            case AnimatorControllerParameterType.Float:
+                                var value = m_Animator.GetFloat(cacheParam.Hash);
+                                UnsafeUtility.WriteArrayElement(cacheParam.Value, 0, value);
+                                break;
+                            case AnimatorControllerParameterType.Int:
+                                var valueInt = m_Animator.GetInteger(cacheParam.Hash);
+                                UnsafeUtility.WriteArrayElement(cacheParam.Value, 0, valueInt);
+
+                                break;
+                            case AnimatorControllerParameterType.Bool:
+                                var valueBool = m_Animator.GetBool(cacheParam.Hash);
+                                UnsafeUtility.WriteArrayElement(cacheParam.Value, 0, valueBool);
+                                break;
+                            case AnimatorControllerParameterType.Trigger:
+                            default:
+                                break;
+                        }
+                    }
+
+                    m_CachedAnimatorParameters[i] = cacheParam;
+                }
+
+                initialized = true;
             }
         }
 
