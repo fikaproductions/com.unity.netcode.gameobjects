@@ -345,6 +345,11 @@ namespace Unity.Netcode.Components
         [ClientRpc]
         private unsafe void SendAnimStateClientRpc(AnimationMessage animSnapshot, ClientRpcParams clientRpcParams = default)
         {
+            if (!m_Animator.isActiveAndEnabled)
+            {
+                return;
+            }
+
             if (animSnapshot.StateHash != 0)
             {
                 m_Animator.Play(animSnapshot.StateHash, animSnapshot.Layer, animSnapshot.NormalizedTime);
