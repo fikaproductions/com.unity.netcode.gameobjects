@@ -392,9 +392,9 @@ namespace Unity.Netcode
         internal Dictionary<uint, int> HashToBuildIndex = new Dictionary<uint, int>();
 
         /// <summary>
-        /// Hash to external scene name lookup table
+        /// Hash to external scene path lookup table
         /// </summary>
-        internal Dictionary<uint, string> HashToExternalSceneName = new Dictionary<uint, string>();
+        internal Dictionary<uint, string> HashToExternalScenePath = new Dictionary<uint, string>();
 
         /// <summary>
         /// Build index to hash lookup table
@@ -527,24 +527,24 @@ namespace Unity.Netcode
         /// <summary>
         /// Register scene from outside of build (e.g. from an Addressables group).
         /// </summary>
-        /// <param name="sceneNames">The name of the external scenes to register.</param>
-        public void RegisterExternalScenes(string[] sceneNames)
+        /// <param name="scenePaths">The paths of the external scenes to register.</param>
+        public void RegisterExternalScenes(string[] scenePaths)
         {
-            HashToExternalSceneName.Clear();
+            HashToExternalScenePath.Clear();
             ExternalSceneNameToHash.Clear();
 
-            foreach (var sceneName in sceneNames)
+            foreach (var scenePath in scenePaths)
             {
-                var hash = XXHash.Hash32(sceneName);
+                var hash = XXHash.Hash32(scenePath);
 
-                if (!HashToExternalSceneName.ContainsKey(hash))
+                if (!HashToExternalScenePath.ContainsKey(hash))
                 {
-                    HashToExternalSceneName.Add(hash, sceneName);
-                    ExternalSceneNameToHash.Add(sceneName, hash);
+                    HashToExternalScenePath.Add(hash, scenePath);
+                    ExternalSceneNameToHash.Add(GetSceneNameFromPath(scenePath), hash);
                 }
                 else
                 {
-                    Debug.LogError($"{nameof(NetworkSceneManager)} is skipping duplicate external scene name entry {sceneName}. Make sure your external scenes registered list does not contain duplicates!");
+                    Debug.LogError($"{nameof(NetworkSceneManager)} is skipping duplicate external scene path entry {scenePath}. Make sure your external scenes registered list does not contain duplicates!");
                 }
             }
         }
@@ -563,28 +563,21 @@ namespace Unity.Netcode
                 return "No Scene";
             }
 
-            if (TryGetScenePathFromHash(sceneHash, out var scenePath))
-            {
-                return GetSceneNameFromPath(scenePath);
-            }
-
-            return HashToExternalSceneName[sceneHash];
+            return GetSceneNameFromPath(ScenePathFromHash(sceneHash));
         }
 
         /// <summary>
         /// Gets the full scene path from a hash value
         /// </summary>
-        internal bool TryGetScenePathFromHash(uint sceneHash, out string scenePath)
+        internal string ScenePathFromHash(uint sceneHash)
         {
-            if (HashToBuildIndex.ContainsKey(sceneHash))
+            if (HashToExternalScenePath.ContainsKey(sceneHash))
             {
-                scenePath = SceneUtility.GetScenePathByBuildIndex(HashToBuildIndex[sceneHash]);
-                return true;
+                return HashToExternalScenePath[sceneHash];
             }
-            else if (HashToExternalSceneName.ContainsKey(sceneHash))
+            else if (HashToBuildIndex.ContainsKey(sceneHash))
             {
-                scenePath = null;
-                return false;
+                return SceneUtility.GetScenePathByBuildIndex(HashToBuildIndex[sceneHash]);
             }
             else
             {
@@ -599,7 +592,11 @@ namespace Unity.Netcode
         internal uint SceneHashFromName(string sceneName)
         {
             var buildIndex = SceneUtility.GetBuildIndexByScenePath(sceneName);
-            if (buildIndex >= 0)
+            if (ExternalSceneNameToHash.ContainsKey(sceneName))
+            {
+                return ExternalSceneNameToHash[sceneName];
+            }
+            else if (buildIndex >= 0)
             {
                 if (BuildIndexToHash.ContainsKey(buildIndex))
                 {
@@ -609,10 +606,6 @@ namespace Unity.Netcode
                 {
                     throw new Exception($"Scene '{sceneName}' has a build index of {buildIndex} that does not exist in the {nameof(BuildIndexToHash)} table!");
                 }
-            }
-            else if (ExternalSceneNameToHash.ContainsKey(sceneName))
-            {
-                return ExternalSceneNameToHash[sceneName];
             }
             else
             {
