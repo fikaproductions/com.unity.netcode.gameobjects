@@ -1,5 +1,4 @@
 using UnityEngine;
-using System.Reflection;
 
 namespace Unity.Netcode.Components
 {
@@ -16,6 +15,17 @@ namespace Unity.Netcode.Components
             {
                 m_HasSentLastValue = true;
             }
+        }
+
+        public override void OnGainedOwnership()
+        {
+            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1560
+            m_HasSentLastValue = true;
+
+            // [PATCH] Local network state is invalid locally when gaining ownership and must be updated.
+            m_LocalAuthoritativeNetworkState = m_ReplicatedNetworkState.Value;
+
+            base.OnGainedOwnership();
         }
 
         protected override void Update()

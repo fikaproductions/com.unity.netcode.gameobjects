@@ -280,9 +280,9 @@ namespace Unity.Netcode.Components
         protected bool m_CachedIsServer;
         protected NetworkManager m_CachedNetworkManager;
 
-        private readonly NetworkVariable<NetworkTransformState> m_ReplicatedNetworkState = new NetworkVariable<NetworkTransformState>(new NetworkTransformState());
-
-        private NetworkTransformState m_LocalAuthoritativeNetworkState;
+        // [PATCH] Allow NetworkTransform derivatives to update their local network state upon ownership changes.
+        private protected readonly NetworkVariable<NetworkTransformState> m_ReplicatedNetworkState = new NetworkVariable<NetworkTransformState>(new NetworkTransformState());
+        private protected NetworkTransformState m_LocalAuthoritativeNetworkState;
 
         private const int k_DebugDrawLineTime = 10;
 
