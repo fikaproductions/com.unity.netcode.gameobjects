@@ -37,6 +37,22 @@ namespace Unity.Netcode.Components
             }
         }
 
+        // [PATCH] Restore networked behaviour if it was disabled for local physics.
+        private void OnEnable()
+        {
+            if (NetworkManager.IsListening && IsSpawned)
+            {
+                UpdateRigidbodyKinematicMode();
+            }
+        }
+
+        // [PATCH] Allow local physics when disabled.
+        private void OnDisable()
+        {
+            m_Rigidbody.isKinematic = m_OriginalKinematic;
+            m_Rigidbody.interpolation = m_OriginalInterpolation;
+        }
+
         private void FixedUpdate()
         {
             if (NetworkManager.IsListening)
