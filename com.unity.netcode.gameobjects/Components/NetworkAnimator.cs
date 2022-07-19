@@ -268,7 +268,8 @@ namespace Unity.Netcode.Components
                 m_NetworkAnimatorStateChangeHandler = null;
             }
 
-            if (IsServer)
+            // [PATCH] Fix clean-up not happening due to IsServer being false upon despawning.
+            if (IsOwner)
             {
                 NetworkManager.OnClientConnectedCallback -= OnClientConnectedCallback;
             }
