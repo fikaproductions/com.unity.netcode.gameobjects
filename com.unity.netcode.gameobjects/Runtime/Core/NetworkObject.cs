@@ -15,7 +15,7 @@ namespace Unity.Netcode
     {
         [HideInInspector]
         [SerializeField]
-        internal uint GlobalObjectIdHash;
+        public uint GlobalObjectIdHash;
 
 #if UNITY_EDITOR
         private void OnValidate()

@@ -100,6 +100,43 @@ namespace Unity.Netcode
         }
 
         /// <summary>
+        /// Use a <see cref="GameObject"/> to recover the <see cref="INetworkPrefabInstanceHandler"/> registered to this key
+        /// </summary>
+        /// <param name="networkPrefabAsset">The <see cref="GameObject"/> of the network prefab handled by the desired <see cref="INetworkPrefabInstanceHandler"/></param>
+        /// <returns>The <see cref="INetworkPrefabInstanceHandler"/> registered to this key (if any)</returns>
+        public INetworkPrefabInstanceHandler GetHandler(GameObject networkPrefabAsset)
+        {
+            return GetHandler(networkPrefabAsset.GetComponent<NetworkObject>().GlobalObjectIdHash);
+        }
+
+        /// <summary>
+        /// Use a <see cref="NetworkObject"/> to recover the <see cref="INetworkPrefabInstanceHandler"/> registered to this key
+        /// </summary>
+        /// <param name="prefabAssetNetworkObject">The <see cref="NetworkObject"/> of the network prefab handled by the desired <see cref="INetworkPrefabInstanceHandler"/></param>
+        /// <returns>The <see cref="INetworkPrefabInstanceHandler"/> registered to this key (if any)</returns>
+        public INetworkPrefabInstanceHandler GetHandler(NetworkObject prefabAssetNetworkObject)
+        {
+            return GetHandler(prefabAssetNetworkObject.GlobalObjectIdHash);
+        }
+
+        /// <summary>
+        /// Use a <see cref="NetworkObject.GlobalObjectIdHash"/> to recover the <see cref="INetworkPrefabInstanceHandler"/> registered to this key
+        /// </summary>
+        /// <param name="globalObjectIdHash">The <see cref="NetworkObject.GlobalObjectIdHash"/> value of the network prefab handled by the desired <see cref="INetworkPrefabInstanceHandler"/></param>
+        /// <returns>The <see cref="INetworkPrefabInstanceHandler"/> registered to this key (if any)</returns>
+        public INetworkPrefabInstanceHandler GetHandler(uint globalObjectIdHash)
+        {
+            if (m_PrefabInstanceToPrefabAsset.TryGetValue(globalObjectIdHash, out var sourceGlobalObjectIdHash))
+            {
+                globalObjectIdHash = sourceGlobalObjectIdHash;
+            }
+
+            m_PrefabAssetToPrefabHandler.TryGetValue(globalObjectIdHash, out var instanceHandler);
+
+            return instanceHandler;
+        }
+
+        /// <summary>
         /// HOST ONLY!
         /// Since a host is unique and is considered both a client and a server, for each source NetworkPrefab you must manually
         /// register all potential <see cref="GameObject"/> target overrides that have the <see cref="NetworkObject"/> component.
@@ -202,7 +239,7 @@ namespace Unity.Netcode
         /// </summary>
         /// <param name="networkPrefab"></param>
         /// <returns>true or false</returns>
-        internal bool ContainsHandler(GameObject networkPrefab)
+        public bool ContainsHandler(GameObject networkPrefab)
         {
             return ContainsHandler(networkPrefab.GetComponent<NetworkObject>().GlobalObjectIdHash);
         }
@@ -212,7 +249,7 @@ namespace Unity.Netcode
         /// </summary>
         /// <param name="networkObject"></param>
         /// <returns>true or false</returns>
-        internal bool ContainsHandler(NetworkObject networkObject)
+        public bool ContainsHandler(NetworkObject networkObject)
         {
             return ContainsHandler(networkObject.GlobalObjectIdHash);
         }
@@ -222,7 +259,7 @@ namespace Unity.Netcode
         /// </summary>
         /// <param name="networkPrefabHash"></param>
         /// <returns>true or false</returns>
-        internal bool ContainsHandler(uint networkPrefabHash)
+        public bool ContainsHandler(uint networkPrefabHash)
         {
             return m_PrefabAssetToPrefabHandler.ContainsKey(networkPrefabHash) || m_PrefabInstanceToPrefabAsset.ContainsKey(networkPrefabHash);
         }
