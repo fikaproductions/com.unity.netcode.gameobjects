@@ -7,17 +7,7 @@ namespace Unity.Netcode
     {
         public static Dictionary<TKey, TValue> ToDictionary<TKey, TValue>(this NetworkDictionary<TKey, TValue> self)
             where TKey : unmanaged, IEquatable<TKey>
-            where TValue : unmanaged
-        {
-            var dictionary = new Dictionary<TKey, TValue>();
-
-            foreach (var (Key, Value) in self)
-            {
-                dictionary.Add(Key, Value);
-            }
-
-            return dictionary;
-        }
+            where TValue : unmanaged => ToDictionary(self, keySelector: key => key);
 
         public static Dictionary<TKeyMapped, TValue> ToDictionary<TKey, TValue, TKeyMapped>(this NetworkDictionary<TKey, TValue> self, Func<TKey, TKeyMapped> keySelector)
             where TKey : unmanaged, IEquatable<TKey>
@@ -35,16 +25,20 @@ namespace Unity.Netcode
 
         public static void UpdateDictionary<TKey, TValue>(this NetworkDictionary<TKey, TValue> self, IDictionary<TKey, TValue> target)
             where TKey : unmanaged, IEquatable<TKey>
+            where TValue : unmanaged => UpdateDictionary(self, target, keySelector: key => key, keyLookup: key => key);
+
+        public static void UpdateDictionary<TKey, TValue, TKeyMapped>(this NetworkDictionary<TKey, TValue> self, IDictionary<TKeyMapped, TValue> target, Func<TKey, TKeyMapped> keySelector, Func<TKeyMapped, TKey> keyLookup)
+            where TKey : unmanaged, IEquatable<TKey>
             where TValue : unmanaged
         {
             foreach (var (Key, Value) in self)
             {
-                target[Key] = Value;
+                target[keySelector.Invoke(Key)] = Value;
             }
 
             foreach (var pair in target)
             {
-                if (!self.ContainsKey(pair.Key))
+                if (!self.ContainsKey(keyLookup.Invoke(pair.Key)))
                 {
                     target.Remove(pair.Key);
                 }
@@ -54,5 +48,9 @@ namespace Unity.Netcode
         public static NetworkDictionary<TKey, TValue>.OnDictionaryChangedDelegate GetDictionaryUpdator<TKey, TValue>(this NetworkDictionary<TKey, TValue> self, IDictionary<TKey, TValue> target)
             where TKey : unmanaged, IEquatable<TKey>
             where TValue : unmanaged => (NetworkDictionaryEvent<TKey, TValue> _) => UpdateDictionary(self, target);
+
+        public static NetworkDictionary<TKey, TValue>.OnDictionaryChangedDelegate GetDictionaryUpdator<TKey, TValue, TKeyMapped>(this NetworkDictionary<TKey, TValue> self, IDictionary<TKeyMapped, TValue> target, Func<TKey, TKeyMapped> keySelector, Func<TKeyMapped, TKey> keyLookup)
+            where TKey : unmanaged, IEquatable<TKey>
+            where TValue : unmanaged => (NetworkDictionaryEvent<TKey, TValue> _) => UpdateDictionary(self, target, keySelector, keyLookup);
     }
 }
