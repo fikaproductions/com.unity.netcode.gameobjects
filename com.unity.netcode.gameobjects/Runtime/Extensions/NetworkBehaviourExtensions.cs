@@ -14,6 +14,11 @@ namespace Unity.Netcode
                 return null;
             }
 
+            if (!self.gameObject.activeInHierarchy)
+            {
+                return null;
+            }
+
             return self.StartCoroutine(ExecuteWhenSpawned());
 
             IEnumerator ExecuteWhenSpawned()
