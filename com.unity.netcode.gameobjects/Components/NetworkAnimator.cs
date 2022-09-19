@@ -41,7 +41,7 @@ namespace Unity.Netcode.Components
         public void NetworkUpdate(NetworkUpdateStage updateStage)
         {
             // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/1757
-            if (!m_NetworkAnimator.isActiveAndEnabled)
+            if (!m_NetworkAnimator || !m_NetworkAnimator.isActiveAndEnabled)
             {
                 return;
             }
