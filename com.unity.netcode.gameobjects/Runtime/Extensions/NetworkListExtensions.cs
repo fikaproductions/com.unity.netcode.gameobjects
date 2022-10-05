@@ -97,6 +97,25 @@ namespace Unity.Netcode
             return -1;
         }
 
+        public static int RemoveWhere<T>(this NetworkList<T> self, Func<T, bool> match) where T : unmanaged, IEquatable<T>
+        {
+            var index = FindIndex(self, match);
+            var numberOfItemsRemoved = 0;
+
+            while (index != -1)
+            {
+                if (match.Invoke(self[index]))
+                {
+                    self.RemoveAt(index);
+                    numberOfItemsRemoved++;
+                }
+
+                index = FindIndex(self, match);
+            }
+
+            return numberOfItemsRemoved;
+        }
+
         public static T[] ToArray<T>(this NetworkList<T> self) where T : unmanaged, IEquatable<T> => ToArray(self, selector: value => value);
 
         public static TMapped[] ToArray<T, TMapped>(this NetworkList<T> self, Func<T, TMapped> selector) where T : unmanaged, IEquatable<T>
