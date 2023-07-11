@@ -546,10 +546,6 @@ namespace Unity.Netcode.Components
             {
                 m_CachedAnimatorParameters.Dispose();
             }
-            if (m_ParameterWriter.IsInitialized)
-            {
-                m_ParameterWriter.Dispose();
-            }
 
             m_Initialized = false;
         }
@@ -557,6 +553,14 @@ namespace Unity.Netcode.Components
         public override void OnDestroy()
         {
             Cleanup();
+
+            // [PATCH] Moved from Cleanup() to allow NetworkAnimator to be despawned and re-spawned again
+            // Retro-fitted from commit 4cd5092 - fix: NetworkAnimator destinationStateMachine exception [MTT-5083] (#2309)
+            if (m_ParameterWriter.IsInitialized)
+            {
+                m_ParameterWriter.Dispose();
+            }
+
             base.OnDestroy();
         }
 
@@ -573,7 +577,7 @@ namespace Unity.Netcode.Components
         internal AnimationMessage GetAnimationMessage()
         {
             return m_AnimationMessage;
-		}
+        }
 
         private bool m_Initialized;
 
