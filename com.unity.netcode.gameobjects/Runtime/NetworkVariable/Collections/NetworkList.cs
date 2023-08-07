@@ -99,10 +99,6 @@ namespace Unity.Netcode
                 switch (element.Type)
                 {
                     case NetworkListEvent<T>.EventType.Add:
-                        {
-                            NetworkVariableSerialization<T>.Write(writer, ref element.Value);
-                        }
-                        break;
                     case NetworkListEvent<T>.EventType.Insert:
                         {
                             writer.WriteValueSafe(element.Index);
@@ -168,9 +164,18 @@ namespace Unity.Netcode
                 {
                     case NetworkListEvent<T>.EventType.Add:
                         {
+                            reader.ReadValueSafe(out int index);
                             var value = new T();
                             NetworkVariableSerialization<T>.Read(reader, ref value);
-                            m_List.Add(value);
+
+                            if (index < m_List.Length)
+                            {
+                                m_List[index] = value;
+                            }
+                            else
+                            {
+                                m_List.Add(value);
+                            }
 
                             if (OnListChanged != null)
                             {
@@ -224,6 +229,7 @@ namespace Unity.Netcode
                             {
                                 m_DirtyEvents.Add(new NetworkListEvent<T>()
                                 {
+
                                     Type = eventType,
                                     Index = index,
                                     Value = m_List[index]

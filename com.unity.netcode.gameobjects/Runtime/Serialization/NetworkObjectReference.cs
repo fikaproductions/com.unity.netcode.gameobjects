@@ -91,6 +91,12 @@ namespace Unity.Netcode
         private static NetworkObject Resolve(NetworkObjectReference networkObjectRef, NetworkManager networkManager = null)
         {
             networkManager = networkManager != null ? networkManager : NetworkManager.Singleton;
+
+            if (!networkManager || networkManager.SpawnManager == null)
+            {
+                return null;
+            }
+
             networkManager.SpawnManager.SpawnedObjects.TryGetValue(networkObjectRef.m_NetworkObjectId, out NetworkObject networkObject);
 
             return networkObject;

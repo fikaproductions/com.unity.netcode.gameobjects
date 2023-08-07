@@ -213,13 +213,17 @@ namespace Unity.Netcode
                             NetworkVariableSerialization<TKey>.Read(reader, ref key);
                             NetworkVariableSerialization<TValue>.Read(reader, ref value);
 
-                            if (m_Keys.Contains(key))
-                            {
-                                throw new Exception("Shouldn't be here, key already exists in dictionary");
-                            }
+                            var index = m_Keys.IndexOf(key);
 
-                            m_Keys.Add(key);
-                            m_Values.Add(value);
+                            if (index == -1)
+                            {
+                                m_Keys.Add(key);
+                                m_Values.Add(value);
+                            }
+                            else
+                            {
+                                m_Values[index] = value;
+                            }
 
                             OnDictionaryChanged?.Invoke(new NetworkDictionaryEvent<TKey, TValue>
                             {

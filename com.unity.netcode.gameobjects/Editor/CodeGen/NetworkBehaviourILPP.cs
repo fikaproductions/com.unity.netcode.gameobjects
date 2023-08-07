@@ -257,6 +257,9 @@ namespace Unity.Netcode.Editor.CodeGen
         private MethodReference m_NetworkVariableSerializationTypes_InitializeEqualityChecker_UnmanagedValueEquals_MethodRef;
         private MethodReference m_NetworkVariableSerializationTypes_InitializeEqualityChecker_ManagedClassEquals_MethodRef;
 
+        // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/2647
+        private MethodReference m_RuntimeInitializeOnLoadAttribute_Ctor;
+
         private TypeReference m_FastBufferWriter_TypeRef;
         private readonly Dictionary<string, MethodReference> m_FastBufferWriter_WriteValue_MethodRefs = new Dictionary<string, MethodReference>();
         private readonly List<MethodReference> m_FastBufferWriter_ExtensionMethodRefs = new List<MethodReference>();
@@ -333,6 +336,9 @@ namespace Unity.Netcode.Editor.CodeGen
                     continue;
                 }
             }
+
+            // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/2647
+            m_RuntimeInitializeOnLoadAttribute_Ctor = moduleDefinition.ImportReference(typeof(RuntimeInitializeOnLoadMethodAttribute).GetConstructor(new Type[] { }));
 
             TypeDefinition networkManagerTypeDef = null;
             TypeDefinition networkBehaviourTypeDef = null;
@@ -770,19 +776,19 @@ namespace Unity.Netcode.Editor.CodeGen
 
             if (rpcHandlers.Count > 0 || rpcNames.Count > 0)
             {
-                var staticCtorMethodDef = typeDefinition.GetStaticConstructor();
-                if (staticCtorMethodDef == null)
-                {
-                    staticCtorMethodDef = new MethodDefinition(
-                        ".cctor", // Static Constructor (constant-constructor)
-                        MethodAttributes.HideBySig |
-                        MethodAttributes.SpecialName |
-                        MethodAttributes.RTSpecialName |
-                        MethodAttributes.Static,
-                        typeDefinition.Module.TypeSystem.Void);
-                    staticCtorMethodDef.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
-                    typeDefinition.Methods.Add(staticCtorMethodDef);
-                }
+                var staticCtorMethodDef = new MethodDefinition(
+                    // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/2647
+                    $"InitializeRPCS_{typeDefinition.Name}",
+                    MethodAttributes.Assembly |
+                    MethodAttributes.Static,
+                    typeDefinition.Module.TypeSystem.Void);
+
+                staticCtorMethodDef.Body.Instructions.Add(Instruction.Create(OpCodes.Ret));
+
+                // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/2647
+                staticCtorMethodDef.CustomAttributes.Add(new CustomAttribute(m_RuntimeInitializeOnLoadAttribute_Ctor));
+
+                typeDefinition.Methods.Add(staticCtorMethodDef);
 
                 var instructions = new List<Instruction>();
                 var processor = staticCtorMethodDef.Body.GetILProcessor();

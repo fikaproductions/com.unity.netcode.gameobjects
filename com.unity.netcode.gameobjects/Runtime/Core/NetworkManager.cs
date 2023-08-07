@@ -36,6 +36,17 @@ namespace Unity.Netcode
         internal static readonly Dictionary<uint, string> __rpc_name_table = new Dictionary<uint, string>();
 #endif
 
+        // [PATCH] https://github.com/Unity-Technologies/com.unity.netcode.gameobjects/issues/2647
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStaticState()
+        {
+            __rpc_func_table.Clear();
+
+#if DEVELOPMENT_BUILD || UNITY_EDITOR
+            __rpc_name_table.Clear();
+#endif
+        }
+
 #pragma warning restore IDE1006 // restore naming rule violation check
 
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
